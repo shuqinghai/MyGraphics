@@ -19,6 +19,21 @@ typedef struct Triangle{
         p1 = QVector3D(0,0,0),p2 = QVector3D(0,0,0),p3 = QVector3D(0,0,0);
         center = (p1+p2+p3)/QVector3D(3,3,3);
     }
+    QVector3D findClosestPoint(const QVector3D& point)
+    {
+        float d1 = (point - p1).length();
+        float d2 = (point - p2).length();
+        float d3 = (point - p3).length();
+        if (d1 <= d2 && d1 <= d3) {
+            return p1;
+        }
+        else if (d2 <= d1 && d2 <= d3) {
+            return p2;
+        }
+        else {
+            return p3;
+        }
+    }
 }Triangle;
 
 

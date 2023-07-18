@@ -69,9 +69,12 @@ void Widget::paintGL()
     for (int i = 0; i < Instances.count(); i++)
     {
         m_program->setUniformValue("model", Instances[i].getModelMatrix());
-        m_program->setUniformValue("color",Instances[i].color);
+        m_program->setUniformValue("color",QVector3D(0,0,0));
         models[Instances[i].modelIndex]->m_vao->bind();
-        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glDrawElements(GL_TRIANGLES, models[Instances[i].modelIndex]->m_indices.size(), GL_UNSIGNED_INT, 0);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        m_program->setUniformValue("color", Instances[i].color);
         glDrawElements(GL_TRIANGLES, models[Instances[i].modelIndex]->m_indices.size(), GL_UNSIGNED_INT, 0);
         models[Instances[i].modelIndex]->m_vao->release();//释放vao
         //m_Lines->addBox(Instances[i].m_AA, Instances[i].m_BB);
@@ -86,7 +89,20 @@ void Widget::paintGL()
     glDrawArrays(GL_LINES, 0, m_Lines->m_vertices.size());
     m_Lines->m_vao->release();
 
+
+    //绘制拾取点
+
+    //关闭深度测试
+
+    glDisable(GL_DEPTH_TEST);
+    glColor3f(1.0f, 0.0f, 0.0f);//设置高两点的颜色
+    glPointSize(10.0f);//设置高亮点的大小
+    glBegin(GL_POINTS);
+    glVertex3f(m_pickedPoint.x(), m_pickedPoint.y(), m_pickedPoint.z());
+    glEnd();
     m_program->release();//释放着色器程序
+    //开启深度测试
+    glEnable(GL_DEPTH_TEST);
 
 }
 
@@ -102,9 +118,16 @@ void Widget::mouseMoveEvent(QMouseEvent *event)
 {
 
     // 调整旋转
-    m_rotateControl[1] += -200 * (event->x() - lastX) / 512;
-    m_rotateControl[0] += -200 * (event->y() - lastY) / 512;
+    m_rotateControl[1] += 200 * (event->x() - lastX) / 512;
+    m_rotateControl[0] += 200 * (event->y() - lastY) / 512;
+    //限制x轴的旋转
+    m_rotateControl[0] = std::clamp(m_rotateControl[0], -90.0f, 90.0f);
     lastX = event->x(), lastY = event->y();
+
+    if (m_isSelecting)
+    {
+        m_selectionEndPos = event->pos();
+    }
     update();    // 重绘
 }
 
@@ -133,15 +156,48 @@ void Widget::mousePressEvent(QMouseEvent *event)
 {
     QVector3D res = {};
     Triangle tri;
-    if (getIntersectionPoint(getRayWorld(event->x(), event->y()), res,tri))
+    bool pickupMode = true;//拾取模式
+    if (getIntersectionPoint(getRayWorld(event->x(), event->y()), res,tri, pickupMode))
     {
         qDebug() << res;
         m_Lines->m_vertices.append(m_camera.m_position);
         m_Lines->m_vertices.append(res);
         m_Lines->addTriangle(tri);
+        m_pickedPoint = res;
     }
     lastX = event->pos().x();
     lastY = event->pos().y();
+
+    if (event->button() == Qt::LeftButton && testModel) {
+        m_selectionStartPos = event->pos();
+        m_selectionEndPos = event->pos();
+        m_isSelecting = true;
+    }
+}
+
+void Widget::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton && m_isSelecting) {
+        QVector3D res = {};
+        Triangle tri;
+        // 处理框选结束事件
+        for (int i = m_selectionStartPos.x();i< m_selectionEndPos.x();i++)
+        {
+            for (int j = m_selectionStartPos.y(); j < m_selectionEndPos.y(); j++)
+            {
+                if (getIntersectionPoint(getRayWorld(i, j), res, tri))
+                {
+                    qDebug() << res;
+                    m_Lines->m_vertices.append(m_camera.m_position);
+                    m_Lines->m_vertices.append(res);
+                    m_Lines->addTriangle(tri);
+                }
+            }
+           
+        }
+        m_isSelecting = false;
+        // 执行框选操作等
+    }
 }
 
 void Widget::move()
@@ -232,7 +288,7 @@ Ray Widget::getRayWorld(float fx,float fy)
     return ray;
 }
 
-bool Widget::getIntersectionPoint(Ray ray,QVector3D &res,Triangle &triangle)
+bool Widget::getIntersectionPoint(Ray ray,QVector3D &res,Triangle &triangle,bool isClosestPoint)
 {
     QVector3D vector = ray.direction;//原始方向
     QVector3D position = ray.startPoint;//原始起点
@@ -265,7 +321,15 @@ bool Widget::getIntersectionPoint(Ray ray,QVector3D &res,Triangle &triangle)
                 QVector3D localInterPoint = locationRay.startPoint + locationRay.direction * hitRes.distance;//局部交点坐标
                 QVector3D realInterPoint = Instances[i].getModelMatrix() * localInterPoint;
                 triangle = Triangle(p1, p2, p3);
-                res = realInterPoint;
+                
+                if (isClosestPoint)//返回与交点最近的点
+                {
+                    res = triangle.findClosestPoint(realInterPoint);
+                }
+                else//返回交点
+                {
+                    res = realInterPoint;
+                }
                 return true;
             }
         }

@@ -39,6 +39,7 @@ public:
     void mouseMoveEvent(QMouseEvent* event);
     void wheelEvent(QWheelEvent *event);
     void mousePressEvent(QMouseEvent *event);
+    void mouseReleaseEvent(QMouseEvent* event);
     void move();
     void keyPressEvent(QKeyEvent* keyEvent)
     {
@@ -51,8 +52,8 @@ public:
     }
     //由屏幕组表转世界向量
     Ray getRayWorld(float fx, float fy);
-    //光线 交点坐标 三角形
-    bool getIntersectionPoint(Ray ray,QVector3D &res,Triangle &triangle);
+    //光线 交点坐标 三角形  isClosestPoint返回模式 false相交的点  true 最近的点
+    bool getIntersectionPoint(Ray ray,QVector3D &res,Triangle &triangle, bool isClosestPoint = false);
 
 private:
     QOpenGLShaderProgram *m_program;
@@ -65,6 +66,12 @@ private:
     Lines *m_Lines;          //
     //键盘状态
     bool keyBoardState[1024] = {};
+
+    QPoint m_selectionStartPos;//选择起始点
+    QPoint m_selectionEndPos;//选择终止点
+    bool m_isSelecting = false;
+    bool testModel = false;//测试模式
+    QVector3D m_pickedPoint = {0,0,0};
 
 };
 #endif // WIDGET_H
