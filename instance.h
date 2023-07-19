@@ -20,7 +20,9 @@ public:
     void setScale(const QVector3D& value);
     void setTranslate(const QVector3D& value);
     void setRotate(const QVector3D& angle);
-
+    void setRevolutionPoint(const QVector3D& point);
+    void setWorldRotate(const QVector3D& angle);
+    void setWorldTranslate(const QVector3D& value);
     void initializeAABB(const QVector3D& AA,const QVector3D& BB);
     void updateAABB();
     //QMatrix4x4 modelMat;//变换矩阵
@@ -29,11 +31,19 @@ public:
     QVector3D m_AA, m_BB;
 
 private:
+
+    //局部变换
     QVector3D m_scaleControl = { 1.0,1.0,1.0 };//缩放控制
     QVector3D m_rotateControl = { 0.0,0.0,0.0 };//旋转控制
     QVector3D m_translateControl = { 0.0,0.0,0.0 };//平移控制
 
+    //世界变换
+    QVector3D m_RevolutionPoint = { 0.0,0.0,0.0 };//公转点
+    QVector3D m_worldRotateControl = { 0.0,0.0,0.0 };//公转控制
+    QVector3D m_worldTranslateControl = { 0.0,0.0,0.0 };//公平移
+
     QVector<QVector3D>m_boxPoints;//代表初始AABB的六个点
+    QMatrix4x4 m_modelPublicLast = {1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};//上次一的公有变换
 };
 
 #endif // INSTANCE_H

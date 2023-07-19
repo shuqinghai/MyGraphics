@@ -54,12 +54,15 @@ public:
     Ray getRayWorld(float fx, float fy);
     //光线 交点坐标 三角形  isClosestPoint返回模式 false相交的点  true 最近的点
     bool getIntersectionPoint(Ray ray,QVector3D &res,Triangle &triangle, bool isClosestPoint = false);
+    //求射线与平面的交点
+    QVector3D getIntersectionPointOfRayAndPlane(const Ray& ray,const QVector3D& point, const QVector3D& normalVector);
 
 private:
     QOpenGLShaderProgram *m_program;
     Camera m_camera;
     QVector3D m_rotateControl = QVector3D(0, 0, 0);// 旋转参数
     QVector3D m_scaleControl = QVector3D(1, 1, 1);//缩放参数
+    QVector3D m_translateControl = QVector3D(0, 0, 0);//位移控制
     double lastX = 0.0, lastY = 0.0;
     QVector<Model*> models;
     QVector<Instance>Instances;
@@ -70,7 +73,7 @@ private:
     QPoint m_selectionStartPos;//选择起始点
     QPoint m_selectionEndPos;//选择终止点
     bool m_isSelecting = false;
-    bool testModel = false;//测试模式
+    bool testModel = false;//测试模式  //实际的框选可能是拉一个框来判断三角形是不是在筒子里
     QVector3D m_pickedPoint = {0,0,0};
 
 };

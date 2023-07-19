@@ -19,7 +19,7 @@ void Widget::initializeGL()
    
     Model *model = new Model("Stanford Bunny.obj", context());
     models.append(model);
-    for (int i = 0; i < 1000; i++)
+    for (int i = 0; i < 100; i++)
     {
         Instance instance;
         instance.modelIndex = 0;
@@ -51,6 +51,16 @@ void Widget::initializeGL()
     //开启深度测试
     glEnable(GL_DEPTH_TEST);
     glClearColor(0.0, 0.4 ,5.0, 1.0);   // 背景颜色 -- 黑
+    //开启抗锯齿
+    QSurfaceFormat format;
+    format.setSamples(4);  // 设置抗锯齿采样数，可以根据需要调整
+    QOpenGLContext* context = QOpenGLContext::currentContext();
+    context->setFormat(format);
+    glEnable(GL_MULTISAMPLE);
+    glHint(GL_LINE_SMOOTH_HINT, GL_NICEST);  // 可以根据需要设置不同的提示参数
+
+
+
 }
 
 void Widget::paintGL()
@@ -61,30 +71,45 @@ void Widget::paintGL()
     QMatrix4x4 unit = { 1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1 };
     QMatrix4x4 scaleMat = unit;
     m_program->bind();
-    Instances[0].setRotate(m_rotateControl);
-    Instances[0].setScale(m_scaleControl);
     m_program->setUniformValue("view",m_camera.getView());
     m_program->setUniformValue("projection",m_camera.getProjection());
     //m_Lines->m_vertices.clear();//清空box
+
+    glLineWidth(1.0f);//设置线宽
+
+
     for (int i = 0; i < Instances.count(); i++)
     {
+        Instances[i].setRevolutionPoint(m_pickedPoint);
+        Instances[i].setWorldRotate(m_rotateControl);
+        Instances[i].setScale(m_scaleControl);
+        Instances[i].setWorldTranslate(m_translateControl);
         m_program->setUniformValue("model", Instances[i].getModelMatrix());
-        m_program->setUniformValue("color",QVector3D(0,0,0));
+        
         models[Instances[i].modelIndex]->m_vao->bind();
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glDrawElements(GL_TRIANGLES, models[Instances[i].modelIndex]->m_indices.size(), GL_UNSIGNED_INT, 0);
+        //绘制面
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         m_program->setUniformValue("color", Instances[i].color);
         glDrawElements(GL_TRIANGLES, models[Instances[i].modelIndex]->m_indices.size(), GL_UNSIGNED_INT, 0);
+
+        glEnable(GL_POLYGON_OFFSET_FILL);//开启多边形偏移
+        glPolygonOffset(1.0f, 1.0f); // 调整偏移量的值，根据需要进行调整
+
+        //绘制线框
+        m_program->setUniformValue("color", QVector3D(0, 0, 0));
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glDrawElements(GL_TRIANGLES, models[Instances[i].modelIndex]->m_indices.size(), GL_UNSIGNED_INT, 0);
         models[Instances[i].modelIndex]->m_vao->release();//释放vao
         //m_Lines->addBox(Instances[i].m_AA, Instances[i].m_BB);
+
     }
    
     //绘制线
-    
+     //关闭深度测试
+    glDisable(GL_DEPTH_TEST);
     m_Lines->updateVertices();
     m_Lines->m_vao->bind();
-    m_program->setUniformValue("color", QVector3D(0, 1, 0));
+    m_program->setUniformValue("color", QVector3D(1, 1, 0));
     m_program->setUniformValue("model", unit);
     glDrawArrays(GL_LINES, 0, m_Lines->m_vertices.size());
     m_Lines->m_vao->release();
@@ -92,10 +117,9 @@ void Widget::paintGL()
 
     //绘制拾取点
 
-    //关闭深度测试
-
-    glDisable(GL_DEPTH_TEST);
-    glColor3f(1.0f, 0.0f, 0.0f);//设置高两点的颜色
+    
+   
+    m_program->setUniformValue("color", QVector3D(0, 0, 128.0/255.0));//设置高两点的颜色
     glPointSize(10.0f);//设置高亮点的大小
     glBegin(GL_POINTS);
     glVertex3f(m_pickedPoint.x(), m_pickedPoint.y(), m_pickedPoint.z());
@@ -116,19 +140,33 @@ void Widget::resizeGL(int w, int h)
 
 void Widget::mouseMoveEvent(QMouseEvent *event)
 {
-
-    // 调整旋转
-    m_rotateControl[1] += 200 * (event->x() - lastX) / 512;
-    m_rotateControl[0] += 200 * (event->y() - lastY) / 512;
-    //限制x轴的旋转
-    m_rotateControl[0] = std::clamp(m_rotateControl[0], -90.0f, 90.0f);
-    lastX = event->x(), lastY = event->y();
-
+    int x = event->button();
+    if (event->buttons() & Qt::LeftButton)//旋转
+    {
+        // 调整旋转
+        m_rotateControl[1] += 200 * (event->x() - lastX) / 512;
+        m_rotateControl[0] += 200 * (event->y() - lastY) / 512;
+        //限制x轴的旋转
+        m_rotateControl[0] = std::clamp(m_rotateControl[0], -90.0f, 90.0f);  
+    }
+    if (event->buttons() & Qt::RightButton)//平移
+    {
+        //射线1，2
+        Ray vector1 = getRayWorld(lastX, lastY);
+        Ray vector2 = getRayWorld(event->x(), event->y());
+        //交点1，2
+        QVector3D point1 = getIntersectionPointOfRayAndPlane(vector1, m_pickedPoint, m_camera.m_direction);
+        QVector3D point2 = getIntersectionPointOfRayAndPlane(vector2, m_pickedPoint, m_camera.m_direction);
+        m_translateControl += (point2 - point1);
+        qDebug() << m_translateControl;
+    }
     if (m_isSelecting)
     {
         m_selectionEndPos = event->pos();
     }
+    lastX = event->x(), lastY = event->y();
     update();    // 重绘
+   
 }
 
 void Widget::wheelEvent(QWheelEvent *event)
@@ -137,16 +175,18 @@ void Widget::wheelEvent(QWheelEvent *event)
 
     if(p.y()>0)
     {
-        m_scaleControl[0] += 1  * 0.1;
-        m_scaleControl[1] += 1  * 0.1;
-        m_scaleControl[2] += 1  * 0.1;
+        //m_scaleControl[0] += 1  * 0.1;
+        //m_scaleControl[1] += 1  * 0.1;
+        //m_scaleControl[2] += 1  * 0.1;
+        m_camera.zoom += 1;
     }
 
     else
     {
-        m_scaleControl[0] -= 1  * 0.1;
-        m_scaleControl[1] -= 1  * 0.1;
-        m_scaleControl[2] -= 1  * 0.1;
+        //m_scaleControl[0] -= 1  * 0.1;
+        //m_scaleControl[1] -= 1  * 0.1;
+        //m_scaleControl[2] -= 1  * 0.1;
+        m_camera.zoom -= 1;
     }
     m_camera.zoom = std::clamp(m_camera.zoom,2.0f,90.0f);
     update();//重绘
@@ -157,18 +197,24 @@ void Widget::mousePressEvent(QMouseEvent *event)
     QVector3D res = {};
     Triangle tri;
     bool pickupMode = true;//拾取模式
-    if (getIntersectionPoint(getRayWorld(event->x(), event->y()), res,tri, pickupMode))
+    if (event->button() == Qt::MidButton &&getIntersectionPoint(getRayWorld(event->x(), event->y()), res,tri, pickupMode))
     {
         qDebug() << res;
-        m_Lines->m_vertices.append(m_camera.m_position);
-        m_Lines->m_vertices.append(res);
+        //绘制射线
+        //m_Lines->m_vertices.append(m_camera.m_position);
+        //m_Lines->m_vertices.append(res);
         m_Lines->addTriangle(tri);
         m_pickedPoint = res;
+        //将旋转清零 
+        m_rotateControl = QVector3D(0, 0, 0);
+        //将位移清零
+        m_translateControl = QVector3D(0, 0, 0);
+
     }
     lastX = event->pos().x();
     lastY = event->pos().y();
 
-    if (event->button() == Qt::LeftButton && testModel) {
+    if (event->button() == Qt::MidButton && testModel) {
         m_selectionStartPos = event->pos();
         m_selectionEndPos = event->pos();
         m_isSelecting = true;
@@ -177,19 +223,19 @@ void Widget::mousePressEvent(QMouseEvent *event)
 
 void Widget::mouseReleaseEvent(QMouseEvent* event)
 {
-    if (event->button() == Qt::LeftButton && m_isSelecting) {
+    if (event->button() == Qt::MidButton && m_isSelecting) {
         QVector3D res = {};
         Triangle tri;
         // 处理框选结束事件
-        for (int i = m_selectionStartPos.x();i< m_selectionEndPos.x();i++)
+        for (int i = m_selectionStartPos.x();i< m_selectionEndPos.x();i+=5)
         {
-            for (int j = m_selectionStartPos.y(); j < m_selectionEndPos.y(); j++)
+            for (int j = m_selectionStartPos.y(); j < m_selectionEndPos.y(); j+=5)
             {
                 if (getIntersectionPoint(getRayWorld(i, j), res, tri))
                 {
                     qDebug() << res;
-                    m_Lines->m_vertices.append(m_camera.m_position);
-                    m_Lines->m_vertices.append(res);
+                    //m_Lines->m_vertices.append(m_camera.m_position);
+                    //m_Lines->m_vertices.append(res);
                     m_Lines->addTriangle(tri);
                 }
             }
@@ -336,5 +382,12 @@ bool Widget::getIntersectionPoint(Ray ray,QVector3D &res,Triangle &triangle,bool
 
     }
     return false;
+}
+
+QVector3D Widget::getIntersectionPointOfRayAndPlane(const Ray& ray,const QVector3D& point, const QVector3D& normalVector)
+{
+    // p = origin + t*vector 
+    double t = (normalVector.x() * (point.x() - ray.startPoint.x()) + normalVector.y() * (point.y() - ray.startPoint.y()) + normalVector.z() * (point.z() - ray.startPoint.z())) / (ray.direction.x()* normalVector.x() + ray.direction.y()* normalVector.y() + ray.direction.z()* normalVector.z());
+    return ray.startPoint + ray.direction * t;
 }
 

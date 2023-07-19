@@ -7,13 +7,25 @@ Instance::Instance()
 QMatrix4x4 Instance::getModelMatrix()
 {
 	QMatrix4x4 model;
+	//缩放——旋转——位移——位移到逆公转点位置——旋转——位移回公转点——位移到逆公转点位置——旋转——位移回公转点
+	//将这个操作逆向执行
+	//模型变换 左乘 上一次的公有变换 左乘 这一次的公有变换
+	QMatrix4x4 modelPublic;//公转变换
+	modelPublic.translate(m_worldTranslateControl);
+	modelPublic.translate(m_RevolutionPoint);
+	modelPublic.rotate(m_worldRotateControl.x(), QVector3D(1, 0, 0));
+	modelPublic.rotate(m_worldRotateControl.y(), QVector3D(0, 1, 0));
+	modelPublic.rotate(m_worldRotateControl.z(), QVector3D(1, 0, 1));
+	modelPublic.translate(-1*m_RevolutionPoint);
 
-	model.translate(m_translateControl);
-	model.rotate(m_rotateControl.x(), QVector3D(1, 0, 0));
-	model.rotate(m_rotateControl.y(), QVector3D(0, 1, 0));
+	QMatrix4x4 modelPrivate;//私有变换
+	modelPrivate.translate(m_translateControl);
+	modelPrivate.rotate(m_rotateControl.x(), QVector3D(1, 0, 0));
+	modelPrivate.rotate(m_rotateControl.y(), QVector3D(0, 1, 0));
 	model.rotate(m_rotateControl.z(), QVector3D(0, 0, 1));
 
-	model.scale(m_scaleControl);
+	modelPrivate.scale(m_scaleControl);
+	model = modelPublic* m_modelPublicLast*modelPrivate;
 	return model;
 }
 
@@ -79,7 +91,37 @@ void Instance::setRotate(const QVector3D& angle)
 {
     m_rotateControl = angle;
 }
+void Instance::setRevolutionPoint(const QVector3D& point)
+{
+	if (point != m_RevolutionPoint)
+	{
+		//获得上一次的公有变换
 
+		//公有变换顺序为
+		//平移旋转中心到原点——旋转——平移回原位置——平移到平移点
+		//矩阵变换逆顺序
+		QMatrix4x4 modelPublic;//公转变换
+
+		modelPublic.translate(m_worldTranslateControl);
+		modelPublic.translate(m_RevolutionPoint);
+		modelPublic.rotate(m_worldRotateControl.x(), QVector3D(1, 0, 0));
+		modelPublic.rotate(m_worldRotateControl.y(), QVector3D(0, 1, 0));
+		modelPublic.rotate(m_worldRotateControl.z(), QVector3D(1, 0, 1));
+		modelPublic.translate(-1 * m_RevolutionPoint);
+		m_modelPublicLast = modelPublic * m_modelPublicLast;
+		m_RevolutionPoint = point;
+	}	
+}
+
+void Instance::setWorldRotate(const QVector3D& angle)
+{
+	m_worldRotateControl = angle;
+}
+
+void Instance::setWorldTranslate(const QVector3D& value)
+{
+	m_worldTranslateControl = value;
+}
 void Instance::initializeAABB(const QVector3D &AA, const QVector3D &BB)
 {
     m_AA = AA;
