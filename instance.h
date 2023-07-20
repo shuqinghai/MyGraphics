@@ -22,6 +22,8 @@ public:
     void setRotate(const QVector3D& angle);
     void setRevolutionPoint(const QVector3D& point);
     void setWorldRotate(const QVector3D& angle);
+    void setBallRotate(const QVector3D& axisl, float angle);
+    void updateBallRotateMatrix();
     void setWorldTranslate(const QVector3D& value);
     void initializeAABB(const QVector3D& AA,const QVector3D& BB);
     void updateAABB();
@@ -41,6 +43,8 @@ private:
     QVector3D m_RevolutionPoint = { 0.0,0.0,0.0 };//公转点
     QVector3D m_worldRotateControl = { 0.0,0.0,0.0 };//公转控制
     QVector3D m_worldTranslateControl = { 0.0,0.0,0.0 };//公平移
+    QVector3D m_axisl = { 0,0,0 };
+    float m_angle = 0;
 
     QVector<QVector3D>m_boxPoints;//代表初始AABB的六个点
     QMatrix4x4 m_modelPublicLast = {1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1};//上次一的公有变换

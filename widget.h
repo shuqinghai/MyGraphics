@@ -17,6 +17,8 @@
 #include "camera.h"
 #include "model.h"
 #include <algorithm>
+#include <QPainter>
+#include <QPen>
 #include "instance.h"
 #include "ray.h"
 #include "lines.h"
@@ -56,13 +58,19 @@ public:
     bool getIntersectionPoint(Ray ray,QVector3D &res,Triangle &triangle, bool isClosestPoint = false);
     //求射线与平面的交点
     QVector3D getIntersectionPointOfRayAndPlane(const Ray& ray,const QVector3D& point, const QVector3D& normalVector);
-
+    //计算球旋转的轴的角度
+    bool getBallRotateAxislAndAngle(float lastX, float lastY, float x, float y,QVector3D &axisl,float &angle);
+    int lineSphereIntersection(QVector3D center, double r, Ray ray, float t[2]);
 private:
     QOpenGLShaderProgram *m_program;
     Camera m_camera;
     QVector3D m_rotateControl = QVector3D(0, 0, 0);// 旋转参数
     QVector3D m_scaleControl = QVector3D(1, 1, 1);//缩放参数
     QVector3D m_translateControl = QVector3D(0, 0, 0);//位移控制
+
+    //按球旋转
+    QVector3D m_rotateAxisl = { 0,0,1 };//旋转轴
+    float m_rotateAngle = 0;//旋转角度
     double lastX = 0.0, lastY = 0.0;
     QVector<Model*> models;
     QVector<Instance>Instances;
@@ -75,6 +83,8 @@ private:
     bool m_isSelecting = false;
     bool testModel = false;//测试模式  //实际的框选可能是拉一个框来判断三角形是不是在筒子里
     QVector3D m_pickedPoint = {0,0,0};
+    double rotateLastX = 0;
+    double rotateLastY = 0;
 
 };
 #endif // WIDGET_H

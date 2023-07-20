@@ -65,6 +65,7 @@ void Widget::initializeGL()
 
 void Widget::paintGL()
 {
+    glEnable(GL_DEPTH_TEST);
     move();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
     //构造模型变换矩阵
@@ -81,7 +82,8 @@ void Widget::paintGL()
     for (int i = 0; i < Instances.count(); i++)
     {
         Instances[i].setRevolutionPoint(m_pickedPoint);
-        Instances[i].setWorldRotate(m_rotateControl);
+        Instances[i].setBallRotate(m_rotateAxisl, m_rotateAngle);
+        //Instances[i].setWorldRotate(m_rotateControl);
         Instances[i].setScale(m_scaleControl);
         Instances[i].setWorldTranslate(m_translateControl);
         m_program->setUniformValue("model", Instances[i].getModelMatrix());
@@ -128,6 +130,19 @@ void Widget::paintGL()
     //开启深度测试
     glEnable(GL_DEPTH_TEST);
 
+    //在屏幕上画一个圈
+    glDisable(GL_DEPTH_TEST);
+    // 计算圆的半径和中心坐标
+    int radius = height() / 4;
+    int centerX = width() / 2;
+    int centerY = height() / 2;
+
+    // 使用QPainter绘制圆
+    QPainter painter(this);
+    painter.setPen(Qt::yellow);
+    //painter.setBrush(Qt::red);
+    painter.drawEllipse(centerX - radius, centerY - radius, radius * 2, radius * 2);
+    glEnable(GL_DEPTH_TEST);
 }
 
 void Widget::resizeGL(int w, int h)
@@ -143,11 +158,19 @@ void Widget::mouseMoveEvent(QMouseEvent *event)
     int x = event->button();
     if (event->buttons() & Qt::LeftButton)//旋转
     {
+
+        //球旋转
+        getBallRotateAxislAndAngle(rotateLastX, rotateLastY, event->x(), event->y(), m_rotateAxisl, m_rotateAngle);
+        qDebug() << m_rotateAngle;
+        qDebug() << m_rotateAxisl;
+        // 
+        // 
+        // 
         // 调整旋转
-        m_rotateControl[1] += 200 * (event->x() - lastX) / 512;
-        m_rotateControl[0] += 200 * (event->y() - lastY) / 512;
+       // m_rotateControl[1] += 200 * (event->x() - lastX) / 512;
+        //m_rotateControl[0] += 200 * (event->y() - lastY) / 512;
         //限制x轴的旋转
-        m_rotateControl[0] = std::clamp(m_rotateControl[0], -90.0f, 90.0f);  
+        //m_rotateControl[0] = std::clamp(m_rotateControl[0], -90.0f, 90.0f);  
     }
     if (event->buttons() & Qt::RightButton)//平移
     {
@@ -205,14 +228,17 @@ void Widget::mousePressEvent(QMouseEvent *event)
         //m_Lines->m_vertices.append(res);
         m_Lines->addTriangle(tri);
         m_pickedPoint = res;
-        //将旋转清零 
-        m_rotateControl = QVector3D(0, 0, 0);
-        //将位移清零
-        m_translateControl = QVector3D(0, 0, 0);
+        ////将旋转清零 
+        //m_rotateControl = QVector3D(0, 0, 0);
+        ////将位移清零
+        //m_translateControl = QVector3D(0, 0, 0);
+        //m_rotateAngle = 0;
 
     }
     lastX = event->pos().x();
     lastY = event->pos().y();
+    rotateLastX = lastX;
+    rotateLastY = lastY;
 
     if (event->button() == Qt::MidButton && testModel) {
         m_selectionStartPos = event->pos();
@@ -244,6 +270,12 @@ void Widget::mouseReleaseEvent(QMouseEvent* event)
         m_isSelecting = false;
         // 执行框选操作等
     }
+    for (int i = 0; i < Instances.count();i++)
+    {
+        Instances[i].updateBallRotateMatrix();
+    }
+    m_rotateAngle = 0;
+    m_translateControl = QVector3D(0, 0, 0);
 }
 
 void Widget::move()
@@ -390,4 +422,90 @@ QVector3D Widget::getIntersectionPointOfRayAndPlane(const Ray& ray,const QVector
     double t = (normalVector.x() * (point.x() - ray.startPoint.x()) + normalVector.y() * (point.y() - ray.startPoint.y()) + normalVector.z() * (point.z() - ray.startPoint.z())) / (ray.direction.x()* normalVector.x() + ray.direction.y()* normalVector.y() + ray.direction.z()* normalVector.z());
     return ray.startPoint + ray.direction * t;
 }
+bool Widget::getBallRotateAxislAndAngle(float lastX, float lastY, float x, float y, QVector3D& axisl, float& angle)
+{
+    //射线1，2
+    Ray vector1 = getRayWorld(lastX, lastY);
+    Ray vector2 = getRayWorld(x,y);
 
+    //计算球心坐标
+    //屏幕中心射线
+    int radius = height() / 4;//屏幕上圆的半径
+    Ray screenRay = getRayWorld(width()/2.0, height()/2.0); 
+    Ray screenOff = getRayWorld(width() / 2.0 + radius, height() / 2.0);
+    QVector3D ballCenter = getIntersectionPointOfRayAndPlane(screenRay, m_pickedPoint, m_camera.m_direction);
+    QVector3D ballCenterOffset = getIntersectionPointOfRayAndPlane(screenOff, m_pickedPoint, m_camera.m_direction);
+    float ballR = (ballCenterOffset - ballCenter).length();//球半径
+    float t[2];
+    QVector3D p1 = { 0,0,0 };//交点1 = {0,0,0};//交点1
+    QVector3D p2 = { 0,0,0 };//交点2
+    if (lineSphereIntersection(ballCenter, ballR, vector1,t) >0)
+    {
+        float tt = min(t[0], t[1]);
+        p1 = vector1.startPoint + vector1.direction * tt;
+    }
+    else
+    {
+        QVector3D op = vector1.startPoint - ballCenter;
+        double a = acos(sqrt(QVector3D::dotProduct(op, op) - pow(ballR, 2)) / op.length());
+        double b = M_PI / 2.0 - a;
+        double c = acos(QVector3D::dotProduct(op.normalized(), vector1.direction.normalized()));
+        double d = c - b;
+        double l = sin(b) / sin(d) * op.length();
+        QVector3D vv = vector1.startPoint + l * vector1.direction.normalized();
+        p1 = ballR * (vv - ballCenter).normalized() + ballCenter;
+    }
+    if (lineSphereIntersection(ballCenter, ballR, vector2, t) > 0)
+    {
+        float tt = min(t[0], t[1]);
+        p2 = vector2.startPoint + vector2.direction * tt;
+    }
+    else
+    {
+        QVector3D op = vector2.startPoint - ballCenter;
+        double a = acos(sqrt(QVector3D::dotProduct(op, op) - pow(ballR, 2)) / op.length());
+        double b = M_PI / 2.0 - a;
+        double c = acos(QVector3D::dotProduct(op.normalized(), vector2.direction.normalized()));
+        double d = c - b;
+        double l = sin(b) / sin(d) * op.length();
+        QVector3D vv = vector2.startPoint + l * vector2.direction.normalized();
+        p2 = ballR * (vv - ballCenter).normalized() + ballCenter;
+    }
+    QVector3D v1 = {0,0,0};//球心与射线1的交点向量
+    QVector3D v2 = {0,0,0};//球心与射线2的交点向量
+    v1 = p1 - ballCenter;
+    v2 = p2 - ballCenter;
+    angle = acos(QVector3D::dotProduct(v1.normalized(), v2.normalized()))/M_PI*180.0;//角度
+    axisl = -1*QVector3D::crossProduct(v1, v2).normalized();
+    if (axisl == QVector3D(0, 0, 0))
+    {
+        axisl = QVector3D(1, 0, 0);
+    }
+    return true;
+}
+int Widget::lineSphereIntersection(QVector3D center, double r, Ray ray, float t[2])
+{
+    float a, b, c, discrm;
+    QVector3D pMinusC = ray.startPoint - center;
+    a = QVector3D::dotProduct(ray.direction, ray.direction);
+    b = 2 * QVector3D::dotProduct(ray.direction, pMinusC);
+    c = QVector3D::dotProduct(pMinusC, pMinusC) - r * r;
+    discrm = b * b - 4 * a*c;
+    if (discrm > 0)
+    {
+        t[0] = (-b + sqrt(discrm)) / (2 * a);
+        t[1] = (-b - sqrt(discrm) / (2 * a));
+        return 2;
+    }
+    else if (discrm == 0)
+    {
+        //The line is tangent to the sphere
+        t[0] = -b / (2 * a);
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+
+}
